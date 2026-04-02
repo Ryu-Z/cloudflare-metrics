@@ -58,9 +58,16 @@ func loadLocation(name string) (*time.Location, error) {
 
 func runScheduler(exporter *Exporter, cfg Config, notifier *LarkNotifier, loc *time.Location) {
 	if cfg.Schedule.IntervalMinutes > 0 {
+		log.Printf("scheduler mode: interval, every %d minutes, timezone=%s", cfg.Schedule.IntervalMinutes, cfg.Schedule.Timezone)
 		runIntervalScheduler(exporter, cfg, notifier, cfg.Schedule.IntervalMinutes)
 		return
 	}
+	log.Printf(
+		"scheduler mode: daily, at %02d:%02d, timezone=%s",
+		cfg.Schedule.Daily.Hour,
+		cfg.Schedule.Daily.Minute,
+		cfg.Schedule.Timezone,
+	)
 	runDailyScheduler(exporter, cfg, notifier, loc, cfg.Schedule.Daily)
 }
 
@@ -98,12 +105,14 @@ func runCollectionJob(exporter *Exporter, cfg Config, notifier *LarkNotifier) {
 		delay = 0
 	}
 
+	log.Printf("collection started")
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		lastErr = exporter.CollectAll(ctx)
 		cancel()
 		if lastErr == nil {
+			log.Printf("collection succeeded on attempt %d/%d", attempt, attempts)
 			return
 		}
 
@@ -112,6 +121,8 @@ func runCollectionJob(exporter *Exporter, cfg Config, notifier *LarkNotifier) {
 			time.Sleep(delay)
 		}
 	}
+
+	log.Printf("collection failed after %d/%d attempts: %v", attempts, attempts, lastErr)
 
 	if notifier != nil {
 		if err := notifier.NotifyCollectionFailure(cfg, exporter, lastErr, attempts); err != nil {
