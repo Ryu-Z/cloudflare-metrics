@@ -1,0 +1,51 @@
+groups:
+  - name: cloudflare-spectrum-cost-alerts
+    rules:
+      - alert: CloudflareAnalyticsCollectionFailed
+        expr: cloudflare_analytics_up == 0
+        for: 10m
+        labels:
+          severity: critical
+          service: cloudflare-analytics-exporter
+        annotations:
+          summary: "Cloudflare Analytics Exporter 采集失败"
+          description: "Exporter 已连续 10 分钟未拿到有效快照，请检查 Cloudflare API、网络、token 或最近一次 Lark 告警信息。"
+
+      - alert: CloudflareSpectrumDailyTrafficSpike
+        expr: |
+          (
+            cloudflare_bytes_total_daily{scope="zone", product="spectrum"}
+            >
+            cloudflare_bytes_total_daily{scope="zone", product="spectrum"} offset 1d * 1.5
+          )
+          and
+          (
+            cloudflare_bytes_total_daily{scope="zone", product="spectrum"} > 500000000000
+          )
+        for: 15m
+        labels:
+          severity: warning
+          service: cloudflare-analytics-exporter
+        annotations:
+          summary: "Spectrum 昨日流量显著上升"
+          description: "zone={{ $labels.zone_domain }} 的昨日 Spectrum 流量较前一天上升超过 50%，且绝对值超过 500 GB，请核查业务活动、攻击流量或配置变更。"
+
+      - alert: CloudflareSpectrumMonthlyBudgetWarning
+        expr: cloudflare_bytes_total_monthly{scope="zone", product="spectrum"} > 5000000000000
+        for: 15m
+        labels:
+          severity: warning
+          service: cloudflare-analytics-exporter
+        annotations:
+          summary: "Spectrum 本月累计流量接近预算"
+          description: "zone={{ $labels.zone_domain }} 的本月 Spectrum 累计流量已超过 5 TB，请结合最近完整月流量和预算配置评估成本风险。"
+
+      - alert: CloudflareSpectrumMonthlyBudgetExceeded
+        expr: cloudflare_bytes_total_monthly{scope="zone", product="spectrum"} > 10000000000000
+        for: 15m
+        labels:
+          severity: critical
+          service: cloudflare-analytics-exporter
+        annotations:
+          summary: "Spectrum 本月累计流量超预算"
+          description: "zone={{ $labels.zone_domain }} 的本月 Spectrum 累计流量已超过 10 TB，请尽快核对计费、业务流量和异常访问。"

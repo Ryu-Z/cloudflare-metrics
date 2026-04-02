@@ -1,0 +1,29 @@
+cloudflare:
+  api_token: "your-api-token-with-Analytics:Read"
+  account_id: "optional-account-id"
+  zones:
+    - zone_id: "your-zone-id"
+      spectrum_zone_id: "optional-spectrum-zone-id"
+      name: "example-zone"
+      domain: "example.com"
+
+metrics:
+  listen_addr: ":9589"
+
+schedule:
+  timezone: "Asia/Shanghai"
+  interval_minutes: 30
+  daily:
+    hour: 1
+    minute: 5
+  retry:
+    max_attempts: 5
+    delay_seconds: 300
+
+alerting:
+  lark:
+    webhook_url: ""
+    secret: ""
+    title: "Cloudflare Analytics Exporter Alert"
+    dashboard_url: ""
+    mention_user_ids: ""

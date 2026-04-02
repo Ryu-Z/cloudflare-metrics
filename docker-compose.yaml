@@ -1,0 +1,25 @@
+services:
+  cloudflare-analytics-exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # image: docker.example.com/ops/cloudflare-metrics:v1
+    container_name: ${CONTAINER_NAME:-cf-analytics-exporter}
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      CF_API_TOKEN: ${CF_API_TOKEN:-}
+      CF_ACCOUNT_ID: ${CF_ACCOUNT_ID:-}
+      CF_ZONE_ID: ${CF_ZONE_ID:-}
+      CF_SPECTRUM_ZONE_ID: ${CF_SPECTRUM_ZONE_ID:-}
+      CF_ZONE_NAME: ${CF_ZONE_NAME:-}
+      CF_ZONE_DOMAIN: ${CF_ZONE_DOMAIN:-}
+      LARK_WEBHOOK_URL: ${LARK_WEBHOOK_URL:-}
+      LARK_SECRET: ${LARK_SECRET:-}
+      LARK_TITLE: ${LARK_TITLE:-}
+      LARK_DASHBOARD_URL: ${LARK_DASHBOARD_URL:-}
+      LARK_MENTION_USER_IDS: ${LARK_MENTION_USER_IDS:-}
+    ports:
+      - "${HOST_PORT:-9589}:${CONTAINER_PORT:-9589}"
+    volumes:
+      - ${CONFIG_PATH:-./config.yaml}:/app/config.yaml:ro

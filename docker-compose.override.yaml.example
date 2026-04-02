@@ -1,0 +1,6 @@
+services:
+  cloudflare-analytics-exporter:
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ${CONFIG_PATH:-./config.yaml}:/app/config.yaml:ro
