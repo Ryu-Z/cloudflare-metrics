@@ -32,6 +32,62 @@
           "color": {
             "mode": "thresholds"
           },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.3.2",
+      "targets": [
+        {
+          "expr": "cloudflare_requests_total_today{scope=\"$scope\", zone_domain=~\"$zone_domain\", product=~\"$product\"}",
+          "refId": "A"
+        }
+      ],
+      "title": "今日累计请求数（默认 Spectrum）",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -47,11 +103,11 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 6,
-        "x": 0,
+        "w": 4,
+        "x": 8,
         "y": 0
       },
-      "id": 1,
+      "id": 13,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -66,13 +122,14 @@
         },
         "textMode": "auto"
       },
+      "pluginVersion": "9.3.2",
       "targets": [
         {
           "expr": "cloudflare_bytes_total_daily{scope=\"$scope\", zone_domain=~\"$zone_domain\", product=~\"$product\"}",
           "refId": "A"
         }
       ],
-      "title": "昨日总流量（默认 Spectrum）",
+      "title": "昨日完整流量（默认 Spectrum）",
       "type": "stat"
     },
     {
@@ -100,8 +157,61 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 6,
-        "x": 6,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "cloudflare_bytes_total_today{scope=\"$scope\", zone_domain=~\"$zone_domain\", product=~\"$product\"}",
+          "refId": "A"
+        }
+      ],
+      "title": "今日累计流量（默认 Spectrum）",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
         "y": 0
       },
       "id": 2,
@@ -153,8 +263,8 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 6,
-        "x": 12,
+        "w": 4,
+        "x": 16,
         "y": 0
       },
       "id": 3,
@@ -206,8 +316,8 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 6,
-        "x": 18,
+        "w": 4,
+        "x": 20,
         "y": 0
       },
       "id": 4,
@@ -269,12 +379,12 @@
       },
       "targets": [
         {
-          "expr": "cloudflare_bytes_total_daily{scope=\"$scope\", zone_domain=~\"$zone_domain\", product=~\"$product\"}",
+          "expr": "cloudflare_bytes_total_today{scope=\"$scope\", zone_domain=~\"$zone_domain\", product=~\"$product\"}",
           "legendFormat": "{{zone_domain}} / {{product}}",
           "refId": "A"
         }
       ],
-      "title": "每日总流量趋势（默认 Spectrum）",
+      "title": "今日累计流量趋势（默认 Spectrum）",
       "type": "timeseries"
     },
     {
@@ -312,12 +422,12 @@
       },
       "targets": [
         {
-          "expr": "cloudflare_requests_total_daily{scope=\"$scope\", zone_domain=~\"$zone_domain\", product=~\"$product\"}",
+          "expr": "cloudflare_requests_total_today{scope=\"$scope\", zone_domain=~\"$zone_domain\", product=~\"$product\"}",
           "legendFormat": "{{zone_domain}} / {{product}}",
           "refId": "A"
         }
       ],
-      "title": "每日请求趋势（默认 Spectrum）",
+      "title": "今日累计请求趋势（默认 Spectrum）",
       "type": "timeseries"
     },
     {
@@ -426,7 +536,7 @@
           "refId": "A"
         }
       ],
-      "title": "日环比（默认 Spectrum）",
+      "title": "昨日环比（默认 Spectrum）",
       "type": "stat"
     },
     {
@@ -656,7 +766,7 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(cloudflare_bytes_total_daily, zone_domain)",
+        "definition": "label_values(cloudflare_bytes_total_today, zone_domain)",
         "hide": 0,
         "includeAll": true,
         "label": "Zone Domain",
@@ -665,7 +775,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(cloudflare_bytes_total_daily, zone_domain)",
+          "query": "label_values(cloudflare_bytes_total_today, zone_domain)",
           "refId": "Prometheus-zone_domain-Variable-Query"
         },
         "refresh": 1,
@@ -709,7 +819,7 @@
     ]
   },
   "time": {
-    "from": "now-30d",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},

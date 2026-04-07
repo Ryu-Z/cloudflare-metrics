@@ -77,6 +77,7 @@ func (e *Exporter) CollectAll(ctx context.Context) error {
 
 func (e *Exporter) collect(ctx context.Context) error {
 	now := time.Now().UTC()
+	todayStart := startOfDay(now)
 	dailyDate := now.AddDate(0, 0, -1)
 	currentMonthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	lastMonthStart := currentMonthStart.AddDate(0, -1, 0)
@@ -85,16 +86,19 @@ func (e *Exporter) collect(ctx context.Context) error {
 	closedMonthStart, closedMonthEnd, closedMonthDateStart, closedMonthDateEnd := latestClosedMonthRange(time.Now().In(e.location))
 
 	nextSamples := make([]Sample, 0, 256)
+	accountTodayAll := UsageNumbers{}
 	accountDailyAll := UsageNumbers{}
 	accountMonthlyAll := UsageNumbers{}
 	accountLastMonthAll := UsageNumbers{}
 	accountClosedMonthAll := UsageNumbers{}
 	accountLastMonthToDateAll := UsageNumbers{}
+	accountTodayHTTP := UsageNumbers{}
 	accountDailyHTTP := UsageNumbers{}
 	accountMonthlyHTTP := UsageNumbers{}
 	accountLastMonthHTTP := UsageNumbers{}
 	accountClosedMonthHTTP := UsageNumbers{}
 	accountLastMonthToDateHTTP := UsageNumbers{}
+	accountTodaySpectrum := UsageNumbers{}
 	accountDailySpectrum := UsageNumbers{}
 	accountMonthlySpectrum := UsageNumbers{}
 	accountLastMonthSpectrum := UsageNumbers{}
@@ -114,6 +118,11 @@ func (e *Exporter) collect(ctx context.Context) error {
 		e.bumpQueryCounter(zone.ZoneID, zone.Domain, statusLabel(err))
 		if err != nil {
 			return newCollectionFailure(zone.Domain, "daily_http", err)
+		}
+		httpToday, err := e.client.FetchHTTPUsage(ctx, zone.ZoneID, now.Format("2006-01-02"), now.Format("2006-01-02"))
+		e.bumpQueryCounter(zone.ZoneID, zone.Domain, statusLabel(err))
+		if err != nil {
+			return newCollectionFailure(zone.Domain, "today_http", err)
 		}
 		httpMonthly, err := e.client.FetchHTTPUsage(ctx, zone.ZoneID, currentMonthStart.Format("2006-01-02"), now.Format("2006-01-02"))
 		e.bumpQueryCounter(zone.ZoneID, zone.Domain, statusLabel(err))
@@ -142,6 +151,12 @@ func (e *Exporter) collect(ctx context.Context) error {
 			log.Printf("zone %s daily spectrum query failed, continuing with zero values: %v", zone.Domain, err)
 			spectrumDaily = UsageNumbers{}
 		}
+		spectrumToday, err := e.client.FetchSpectrumUsage(ctx, zone.SpectrumZoneID, todayStart, now)
+		e.bumpQueryCounter(zone.ZoneID, zone.Domain, statusLabel(err))
+		if err != nil {
+			log.Printf("zone %s today spectrum query failed, continuing with zero values: %v", zone.Domain, err)
+			spectrumToday = UsageNumbers{}
+		}
 		spectrumMonthly, err := e.client.FetchSpectrumUsage(ctx, zone.SpectrumZoneID, currentMonthStart, now)
 		e.bumpQueryCounter(zone.ZoneID, zone.Domain, statusLabel(err))
 		if err != nil {
@@ -167,12 +182,16 @@ func (e *Exporter) collect(ctx context.Context) error {
 			spectrumLastMonthToDate = UsageNumbers{}
 		}
 
+		todayAll := mergeUsage(httpToday, spectrumToday)
 		dailyAll := mergeUsage(httpDaily, spectrumDaily)
 		monthlyAll := mergeUsage(httpMonthly, spectrumMonthly)
 		lastMonthAll := mergeUsage(httpLastMonth, spectrumLastMonth)
 		closedMonthAll := mergeUsage(httpClosedMonth, spectrumClosedMonth)
 		lastMonthToDateAll := mergeUsage(httpLastMonthToDate, spectrumLastMonthToDate)
 
+		nextSamples = append(nextSamples, usageSamples("today", "all", todayAll, baseLabels)...)
+		nextSamples = append(nextSamples, usageSamples("today", "http", httpToday, baseLabels)...)
+		nextSamples = append(nextSamples, usageSamples("today", "spectrum", spectrumToday, baseLabels)...)
 		nextSamples = append(nextSamples, usageSamples("daily", "all", dailyAll, baseLabels)...)
 		nextSamples = append(nextSamples, usageSamples("daily", "http", httpDaily, baseLabels)...)
 		nextSamples = append(nextSamples, usageSamples("daily", "spectrum", spectrumDaily, baseLabels)...)
@@ -194,16 +213,19 @@ func (e *Exporter) collect(ctx context.Context) error {
 			Value:  float64(time.Now().Unix()),
 		})
 
+		accountTodayAll = mergeUsage(accountTodayAll, todayAll)
 		accountDailyAll = mergeUsage(accountDailyAll, dailyAll)
 		accountMonthlyAll = mergeUsage(accountMonthlyAll, monthlyAll)
 		accountLastMonthAll = mergeUsage(accountLastMonthAll, lastMonthAll)
 		accountClosedMonthAll = mergeUsage(accountClosedMonthAll, closedMonthAll)
 		accountLastMonthToDateAll = mergeUsage(accountLastMonthToDateAll, lastMonthToDateAll)
+		accountTodayHTTP = mergeUsage(accountTodayHTTP, httpToday)
 		accountDailyHTTP = mergeUsage(accountDailyHTTP, httpDaily)
 		accountMonthlyHTTP = mergeUsage(accountMonthlyHTTP, httpMonthly)
 		accountLastMonthHTTP = mergeUsage(accountLastMonthHTTP, httpLastMonth)
 		accountClosedMonthHTTP = mergeUsage(accountClosedMonthHTTP, httpClosedMonth)
 		accountLastMonthToDateHTTP = mergeUsage(accountLastMonthToDateHTTP, httpLastMonthToDate)
+		accountTodaySpectrum = mergeUsage(accountTodaySpectrum, spectrumToday)
 		accountDailySpectrum = mergeUsage(accountDailySpectrum, spectrumDaily)
 		accountMonthlySpectrum = mergeUsage(accountMonthlySpectrum, spectrumMonthly)
 		accountLastMonthSpectrum = mergeUsage(accountLastMonthSpectrum, spectrumLastMonth)
@@ -220,6 +242,9 @@ func (e *Exporter) collect(ctx context.Context) error {
 			"zone_domain": "",
 		}
 
+		nextSamples = append(nextSamples, usageSamples("today", "all", accountTodayAll, accountLabels)...)
+		nextSamples = append(nextSamples, usageSamples("today", "http", accountTodayHTTP, accountLabels)...)
+		nextSamples = append(nextSamples, usageSamples("today", "spectrum", accountTodaySpectrum, accountLabels)...)
 		nextSamples = append(nextSamples, usageSamples("daily", "all", accountDailyAll, accountLabels)...)
 		nextSamples = append(nextSamples, usageSamples("daily", "http", accountDailyHTTP, accountLabels)...)
 		nextSamples = append(nextSamples, usageSamples("daily", "spectrum", accountDailySpectrum, accountLabels)...)
@@ -255,6 +280,11 @@ func (e *Exporter) RenderMetrics() string {
 	defer e.mu.RUnlock()
 
 	var b strings.Builder
+	writeMetricHeader(&b, "cloudflare_bytes_total_today", "Gauge", "Current day's cumulative total bytes across the selected product scope.")
+	writeMetricHeader(&b, "cloudflare_bytes_ingress_today", "Gauge", "Current day's cumulative ingress bytes across the selected product scope.")
+	writeMetricHeader(&b, "cloudflare_bytes_egress_today", "Gauge", "Current day's cumulative egress bytes across the selected product scope.")
+	writeMetricHeader(&b, "cloudflare_bytes_cached_today", "Gauge", "Current day's cumulative cached HTTP bytes.")
+	writeMetricHeader(&b, "cloudflare_requests_total_today", "Gauge", "Current day's cumulative requests or connection count across the selected product scope.")
 	writeMetricHeader(&b, "cloudflare_bytes_total_daily", "Gauge", "Previous full day's total bytes across the selected product scope.")
 	writeMetricHeader(&b, "cloudflare_bytes_ingress_daily", "Gauge", "Previous full day's ingress bytes across the selected product scope.")
 	writeMetricHeader(&b, "cloudflare_bytes_egress_daily", "Gauge", "Previous full day's egress bytes across the selected product scope.")

@@ -20,6 +20,11 @@
 
 Exporter 会输出以下核心指标：
 
+- `cloudflare_bytes_total_today`
+- `cloudflare_bytes_ingress_today`
+- `cloudflare_bytes_egress_today`
+- `cloudflare_bytes_cached_today`
+- `cloudflare_requests_total_today`
 - `cloudflare_bytes_total_daily`
 - `cloudflare_bytes_ingress_daily`
 - `cloudflare_bytes_egress_daily`
@@ -62,6 +67,7 @@ Exporter 会输出以下核心指标：
 
 不再使用 `date` / `month` 这类时间标签。时间范围由 exporter 查询逻辑决定：
 
+- `*_today`: 当日从 00:00 UTC 到当前时刻的累计
 - `*_daily`: 昨日完整自然日
 - `*_monthly`: 本月 1 日到当前时刻的累计
 - `*_last_month`: 上一个完整自然月
@@ -383,12 +389,14 @@ make test-alert
 
 看板包含这些视图：
 
-- 昨日总流量
+- 今日累计流量
+- 今日累计请求数
+- 昨日完整流量
 - 本月累计流量
 - 最近完整月流量
 - 上月同期累计流量
-- 每日总流量趋势
-- 每日请求趋势
+- 今日累计流量趋势
+- 今日累计请求趋势
 - 本月累计 vs 最近完整月
 - 日环比百分比
 - 月对比变化率
