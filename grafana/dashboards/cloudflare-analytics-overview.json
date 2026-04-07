@@ -497,15 +497,15 @@
               },
               {
                 "color": "yellow",
-                "value": 0
+                "value": -0.1
               },
               {
                 "color": "green",
-                "value": 10
+                "value": 0
               }
             ]
           },
-          "unit": "percent"
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -558,15 +558,15 @@
               },
               {
                 "color": "yellow",
-                "value": 0
+                "value": -0.1
               },
               {
                 "color": "green",
-                "value": 0.1
+                "value": 0
               }
             ]
           },
-          "unit": "percent"
+          "unit": "percentunit"
         },
         "overrides": []
       },
