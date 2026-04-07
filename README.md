@@ -397,9 +397,9 @@ make test-alert
 - 上月同期累计流量
 - 今日累计流量趋势
 - 今日累计请求趋势
-- 本月累计 vs 最近完整月
+- 本月累计 vs 上月同期累计
 - 日环比百分比
-- 月对比变化率
+- 本月同期环比
 
 如果你的目标是做 Spectrum 成本核对，建议优先导入 `cloudflare-spectrum-cost-overview.json`。
 
@@ -440,11 +440,11 @@ clamp_min(
 (
   cloudflare_bytes_total_monthly{scope="zone", zone_domain="example.com", product="spectrum"}
   -
-  cloudflare_bytes_total_closed_month{scope="zone", zone_domain="example.com", product="spectrum"}
+  cloudflare_bytes_total_last_month_to_date{scope="zone", zone_domain="example.com", product="spectrum"}
 )
 /
 clamp_min(
-  cloudflare_bytes_total_closed_month{scope="zone", zone_domain="example.com", product="spectrum"},
+  cloudflare_bytes_total_last_month_to_date{scope="zone", zone_domain="example.com", product="spectrum"},
   1
 ) * 100
 ```
