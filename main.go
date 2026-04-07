@@ -112,6 +112,20 @@ func runCollectionJob(exporter *Exporter, cfg Config, notifier *LarkNotifier) {
 		lastErr = exporter.CollectAll(ctx)
 		cancel()
 		if lastErr == nil {
+			if partial := exporter.LastPartial(); partial != "" {
+				log.Printf("collection completed with partial failures: %s", partial)
+				if notifier != nil {
+					if details, ok := exporter.ShouldNotifyPartial(); ok {
+						if err := notifier.NotifyPartialFailure(cfg, exporter, details); err != nil {
+							log.Printf("send lark partial alert failed: %v", err)
+						} else {
+							log.Printf("lark partial alert sent successfully")
+						}
+					}
+				}
+			} else {
+				_, _ = exporter.ShouldNotifyPartial()
+			}
 			log.Printf("collection succeeded on attempt %d/%d", attempt, attempts)
 			return
 		}

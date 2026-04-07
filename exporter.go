@@ -18,14 +18,16 @@ type Sample struct {
 }
 
 type Exporter struct {
-	cfg         Config
-	client      *CloudflareClient
-	location    *time.Location
-	mu          sync.RWMutex
-	samples     []Sample
-	counters    map[string]float64
-	lastError   string
-	lastSuccess time.Time
+	cfg                 Config
+	client              *CloudflareClient
+	location            *time.Location
+	mu                  sync.RWMutex
+	samples             []Sample
+	counters            map[string]float64
+	lastError           string
+	lastPartial         string
+	lastNotifiedPartial string
+	lastSuccess         time.Time
 }
 
 type CollectionFailure struct {
@@ -84,6 +86,8 @@ func (e *Exporter) collect(ctx context.Context) error {
 	lastMonthEnd := currentMonthStart.Add(-time.Second)
 	lastMonthToDateEnd := previousMonthEquivalent(now, time.UTC)
 	closedMonthStart, closedMonthEnd, closedMonthDateStart, closedMonthDateEnd := latestClosedMonthRange(time.Now().In(e.location))
+	previousSamples := e.snapshotSamples()
+	var partialFailures []string
 
 	nextSamples := make([]Sample, 0, 256)
 	accountTodayAll := UsageNumbers{}
@@ -148,38 +152,44 @@ func (e *Exporter) collect(ctx context.Context) error {
 		spectrumDaily, err := e.client.FetchSpectrumUsage(ctx, zone.SpectrumZoneID, startOfDay(dailyDate), endOfDay(dailyDate))
 		e.bumpQueryCounter(zone.ZoneID, zone.Domain, statusLabel(err))
 		if err != nil {
-			log.Printf("zone %s daily spectrum query failed, continuing with zero values: %v", zone.Domain, err)
-			spectrumDaily = UsageNumbers{}
+			spectrumDaily = e.fallbackUsage(previousSamples, "daily", "spectrum", baseLabels)
+			log.Printf("zone %s daily spectrum query failed, reusing previous values: %v", zone.Domain, err)
+			partialFailures = append(partialFailures, fmt.Sprintf("%s:daily_spectrum", zone.Domain))
 		}
 		spectrumToday, err := e.client.FetchSpectrumUsage(ctx, zone.SpectrumZoneID, todayStart, now)
 		e.bumpQueryCounter(zone.ZoneID, zone.Domain, statusLabel(err))
 		if err != nil {
-			log.Printf("zone %s today spectrum query failed, continuing with zero values: %v", zone.Domain, err)
-			spectrumToday = UsageNumbers{}
+			spectrumToday = e.fallbackUsage(previousSamples, "today", "spectrum", baseLabels)
+			log.Printf("zone %s today spectrum query failed, reusing previous values: %v", zone.Domain, err)
+			partialFailures = append(partialFailures, fmt.Sprintf("%s:today_spectrum", zone.Domain))
 		}
 		spectrumMonthly, err := e.client.FetchSpectrumUsage(ctx, zone.SpectrumZoneID, currentMonthStart, now)
 		e.bumpQueryCounter(zone.ZoneID, zone.Domain, statusLabel(err))
 		if err != nil {
-			log.Printf("zone %s monthly spectrum query failed, continuing with zero values: %v", zone.Domain, err)
-			spectrumMonthly = UsageNumbers{}
+			spectrumMonthly = e.fallbackUsage(previousSamples, "monthly", "spectrum", baseLabels)
+			log.Printf("zone %s monthly spectrum query failed, reusing previous values: %v", zone.Domain, err)
+			partialFailures = append(partialFailures, fmt.Sprintf("%s:monthly_spectrum", zone.Domain))
 		}
 		spectrumLastMonth, err := e.client.FetchSpectrumUsage(ctx, zone.SpectrumZoneID, lastMonthStart, lastMonthEnd)
 		e.bumpQueryCounter(zone.ZoneID, zone.Domain, statusLabel(err))
 		if err != nil {
-			log.Printf("zone %s last month spectrum query failed, continuing with zero values: %v", zone.Domain, err)
-			spectrumLastMonth = UsageNumbers{}
+			spectrumLastMonth = e.fallbackUsage(previousSamples, "last_month", "spectrum", baseLabels)
+			log.Printf("zone %s last month spectrum query failed, reusing previous values: %v", zone.Domain, err)
+			partialFailures = append(partialFailures, fmt.Sprintf("%s:last_month_spectrum", zone.Domain))
 		}
 		spectrumClosedMonth, err := e.client.FetchSpectrumUsage(ctx, zone.SpectrumZoneID, closedMonthStart, closedMonthEnd)
 		e.bumpQueryCounter(zone.ZoneID, zone.Domain, statusLabel(err))
 		if err != nil {
-			log.Printf("zone %s closed month spectrum query failed, continuing with zero values: %v", zone.Domain, err)
-			spectrumClosedMonth = UsageNumbers{}
+			spectrumClosedMonth = e.fallbackUsage(previousSamples, "closed_month", "spectrum", baseLabels)
+			log.Printf("zone %s closed month spectrum query failed, reusing previous values: %v", zone.Domain, err)
+			partialFailures = append(partialFailures, fmt.Sprintf("%s:closed_month_spectrum", zone.Domain))
 		}
 		spectrumLastMonthToDate, err := e.client.FetchSpectrumUsage(ctx, zone.SpectrumZoneID, lastMonthStart, lastMonthToDateEnd)
 		e.bumpQueryCounter(zone.ZoneID, zone.Domain, statusLabel(err))
 		if err != nil {
-			log.Printf("zone %s last month-to-date spectrum query failed, continuing with zero values: %v", zone.Domain, err)
-			spectrumLastMonthToDate = UsageNumbers{}
+			spectrumLastMonthToDate = e.fallbackUsage(previousSamples, "last_month_to_date", "spectrum", baseLabels)
+			log.Printf("zone %s last month-to-date spectrum query failed, reusing previous values: %v", zone.Domain, err)
+			partialFailures = append(partialFailures, fmt.Sprintf("%s:last_month_to_date_spectrum", zone.Domain))
 		}
 
 		todayAll := mergeUsage(httpToday, spectrumToday)
@@ -271,6 +281,7 @@ func (e *Exporter) collect(ctx context.Context) error {
 	defer e.mu.Unlock()
 	e.samples = nextSamples
 	e.lastError = ""
+	e.lastPartial = strings.Join(partialFailures, ",")
 	e.lastSuccess = time.Now()
 	return nil
 }
@@ -312,6 +323,7 @@ func (e *Exporter) RenderMetrics() string {
 	writeMetricHeader(&b, "cloudflare_requests_total_last_month_to_date", "Gauge", "Previous month's cumulative requests or connection count through the equivalent day-of-month across the selected product scope.")
 	writeMetricHeader(&b, "cloudflare_analytics_query_total", "Counter", "Total number of upstream Cloudflare analytics API calls.")
 	writeMetricHeader(&b, "cloudflare_analytics_last_success_timestamp", "Gauge", "Unix timestamp of the last successful collection.")
+	writeMetricHeader(&b, "cloudflare_analytics_partial_failure", "Gauge", "Whether the latest collection reused previous values for any partial upstream failure.")
 	writeMetricHeader(&b, "cloudflare_analytics_up", "Gauge", "Whether the exporter has a fresh successful snapshot.")
 
 	for _, sample := range e.samples {
@@ -341,6 +353,14 @@ func (e *Exporter) RenderMetrics() string {
 		b.WriteByte('\n')
 	}
 
+	partial := 0.0
+	if e.lastPartial != "" {
+		partial = 1
+	}
+	b.WriteString("cloudflare_analytics_partial_failure ")
+	b.WriteString(strconv.FormatFloat(partial, 'f', -1, 64))
+	b.WriteByte('\n')
+
 	up := 1.0
 	if len(e.samples) == 0 || e.lastError != "" {
 		up = 0
@@ -363,11 +383,47 @@ func (e *Exporter) LastSuccess() time.Time {
 	return e.lastSuccess
 }
 
+func (e *Exporter) LastPartial() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.lastPartial
+}
+
+func (e *Exporter) ShouldNotifyPartial() (string, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.lastPartial == "" {
+		e.lastNotifiedPartial = ""
+		return "", false
+	}
+	if e.lastPartial == e.lastNotifiedPartial {
+		return "", false
+	}
+	e.lastNotifiedPartial = e.lastPartial
+	return e.lastPartial, true
+}
+
 func (e *Exporter) bumpQueryCounter(zoneID, zoneDomain, status string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	key := strings.Join([]string{zoneID, zoneDomain, status}, "\x00")
 	e.counters[key]++
+}
+
+func (e *Exporter) snapshotSamples() []Sample {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make([]Sample, len(e.samples))
+	copy(out, e.samples)
+	return out
+}
+
+func (e *Exporter) fallbackUsage(samples []Sample, period, product string, labels map[string]string) UsageNumbers {
+	usage, ok := usageFromSamples(samples, period, product, labels)
+	if !ok {
+		return UsageNumbers{}
+	}
+	return usage
 }
 
 func usageSamples(period, product string, usage UsageNumbers, labels map[string]string) []Sample {
@@ -378,6 +434,58 @@ func usageSamples(period, product string, usage UsageNumbers, labels map[string]
 	out = append(out, Sample{Metric: "cloudflare_bytes_cached_" + period, Labels: withProduct(labels, product), Value: usage.BytesCached})
 	out = append(out, Sample{Metric: "cloudflare_requests_total_" + period, Labels: withProduct(labels, product), Value: usage.RequestsTotal})
 	return out
+}
+
+func usageFromSamples(samples []Sample, period, product string, labels map[string]string) (UsageNumbers, bool) {
+	targetLabels := withProduct(labels, product)
+	metrics := map[string]*float64{}
+	for i := range samples {
+		sample := samples[i]
+		if !sameLabels(sample.Labels, targetLabels) {
+			continue
+		}
+		switch sample.Metric {
+		case "cloudflare_bytes_total_" + period:
+			metrics["bytes_total"] = &sample.Value
+		case "cloudflare_bytes_ingress_" + period:
+			metrics["bytes_ingress"] = &sample.Value
+		case "cloudflare_bytes_egress_" + period:
+			metrics["bytes_egress"] = &sample.Value
+		case "cloudflare_bytes_cached_" + period:
+			metrics["bytes_cached"] = &sample.Value
+		case "cloudflare_requests_total_" + period:
+			metrics["requests_total"] = &sample.Value
+		}
+	}
+	if len(metrics) == 0 {
+		return UsageNumbers{}, false
+	}
+	return UsageNumbers{
+		BytesTotal:    deref(metrics["bytes_total"]),
+		BytesIngress:  deref(metrics["bytes_ingress"]),
+		BytesEgress:   deref(metrics["bytes_egress"]),
+		BytesCached:   deref(metrics["bytes_cached"]),
+		RequestsTotal: deref(metrics["requests_total"]),
+	}, true
+}
+
+func deref(v *float64) float64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func sameLabels(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for key, value := range a {
+		if b[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 func withProduct(labels map[string]string, product string) map[string]string {

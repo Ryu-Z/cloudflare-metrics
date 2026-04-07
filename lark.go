@@ -138,6 +138,95 @@ func (n *LarkNotifier) NotifyCollectionFailure(cfg Config, exporter *Exporter, l
 	return nil
 }
 
+func (n *LarkNotifier) NotifyPartialFailure(cfg Config, exporter *Exporter, details string) error {
+	if n == nil {
+		return nil
+	}
+
+	lines := []string{
+		"**状态：** 部分采集失败",
+		fmt.Sprintf("**告警时间：** %s", time.Now().Format(time.RFC3339)),
+		fmt.Sprintf("**Prometheus 抓取端口：** %s", escapeCardText(cfg.Metrics.ListenAddr)),
+		fmt.Sprintf("**配置 Zone：** %s", escapeCardText(joinZoneDomains(cfg.Cloudflare.Zones))),
+		fmt.Sprintf("**失败详情：** %s", escapeCardText(details)),
+	}
+	if exporter != nil {
+		lastSuccess := exporter.LastSuccess()
+		if !lastSuccess.IsZero() {
+			lines = append(lines, fmt.Sprintf("**最近成功：** %s", lastSuccess.Format(time.RFC3339)))
+		}
+	}
+
+	payload := map[string]any{
+		"msg_type": "interactive",
+		"card": map[string]any{
+			"config": map[string]any{
+				"wide_screen_mode": true,
+				"enable_forward":   true,
+			},
+			"header": map[string]any{
+				"template": "orange",
+				"title": map[string]any{
+					"tag":     "plain_text",
+					"content": n.cfg.Title + " Partial Failure",
+				},
+			},
+			"elements": buildCardElements(n.cfg, lines, nil),
+		},
+	}
+
+	if n.cfg.Secret != "" {
+		timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+		sign, err := larkSign(timestamp, n.cfg.Secret)
+		if err != nil {
+			return fmt.Errorf("sign lark request: %w", err)
+		}
+		payload["timestamp"] = timestamp
+		payload["sign"] = sign
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal lark payload: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, n.cfg.WebhookURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create lark request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := n.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("send lark request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("lark webhook status %s", resp.Status)
+	}
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read lark response: %w", err)
+	}
+	var larkResp struct {
+		Code          int    `json:"code"`
+		Msg           string `json:"msg"`
+		StatusCode    int    `json:"StatusCode"`
+		StatusMessage string `json:"StatusMessage"`
+	}
+	if len(respBody) > 0 {
+		if err := json.Unmarshal(respBody, &larkResp); err == nil {
+			if larkResp.Code != 0 {
+				return fmt.Errorf("lark webhook code %d: %s", larkResp.Code, larkResp.Msg)
+			}
+			if larkResp.StatusCode != 0 {
+				return fmt.Errorf("lark webhook status code %d: %s", larkResp.StatusCode, larkResp.StatusMessage)
+			}
+		}
+	}
+	return nil
+}
+
 func larkSign(timestamp, secret string) (string, error) {
 	stringToSign := timestamp + "\n" + secret
 	mac := hmac.New(sha256.New, []byte(stringToSign))

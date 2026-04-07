@@ -13,6 +13,7 @@
 - 之后按计划拉取一次 Cloudflare 数据，默认每 30 分钟刷新一次内存缓存
 - Prometheus 抓取 `/metrics` 时只读取内存缓存，不会触发新的 Cloudflare 请求
 - 如果采集失败，会按配置重试；连续失败达到阈值后发送 Lark 机器人告警
+- 如果仅部分上游查询失败（例如 Spectrum 某个窗口 500），exporter 会保留上一轮成功值，并暴露 `cloudflare_analytics_partial_failure=1`
 
 当前版本重点暴露 `bytes`、`requests` 和 Spectrum ingress/egress，适合做总体流量、成本趋势和预算告警。对于 Spectrum，`bytes_total` 按 `bytesIngress + bytesEgress` 计算。
 
@@ -355,6 +356,7 @@ make test-alert
 - 如果重试全部失败，`/metrics` 仍会继续暴露上一次成功的缓存
 - 如果最近一次采集失败，`/healthz` 会返回 `503`
 - Lark 告警会包含失败 zone、失败阶段、最近一次成功时间和可选 dashboard 链接
+- 当采集整体成功但部分查询降级复用上一轮值时，会发送一次“部分采集失败”告警，避免每轮重复刷屏
 - Lark 告警使用富文本 `post` 格式，支持标题、链接和 `@user_id`
 
 ## 数据来源
