@@ -714,8 +714,8 @@
       {
         "current": {
           "selected": false,
-          "text": "Prometheus",
-          "value": "Prometheus"
+          "text": "VictoriaMetrics",
+          "value": "VictoriaMetrics"
         },
         "hide": 0,
         "includeAll": false,
@@ -723,7 +723,8 @@
         "multi": false,
         "name": "datasource",
         "options": [],
-        "query": "prometheus",
+        "query": "victoriametrics-metrics-datasource",
+        "queryValue": "",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
