@@ -749,12 +749,12 @@
       },
       "targets": [
         {
-          "expr": "cloudflare_analytics_query_total{zone_domain=~\"$zone_domain\"}",
+          "expr": "cloudflare_analytics_query_total_daily{zone_domain=~\"$zone_domain\"}",
           "legendFormat": "{{zone_domain}} / {{status}}",
           "refId": "A"
         }
       ],
-      "title": "Cloudflare API 调用计数",
+      "title": "Cloudflare API 当日调用计数",
       "type": "timeseries"
     }
   ],

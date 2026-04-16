@@ -51,9 +51,11 @@ Exporter 会输出以下核心指标：
 - `cloudflare_bytes_egress_last_month_to_date`
 - `cloudflare_bytes_cached_last_month_to_date`
 - `cloudflare_requests_total_last_month_to_date`
-- `cloudflare_analytics_query_total`
+- `cloudflare_analytics_query_total_daily`
 - `cloudflare_analytics_last_success_timestamp`
 - `cloudflare_analytics_up`
+
+其中 `cloudflare_analytics_query_total_daily` 表示按 `UTC` 自然日累计的 Cloudflare 上游 API 调用次数，每天自动归零；在 `Asia/Shanghai` 等 `UTC+8` 视角下会表现为每天早上 08:00 左右切日。
 
 所有用量指标都带有这些标签：
 
@@ -119,7 +121,7 @@ alerting:
 
 - `schedule.interval_minutes`: 固定间隔轮询，单位分钟；大于 0 时优先使用，例如 `30` 表示每半小时刷新一次内存缓存
 - `schedule.daily`: 兼容旧版的按天定时执行；仅当 `interval_minutes <= 0` 时才会生效
-- `schedule.timezone`: 只影响任务调度在本地何时执行，不影响 Cloudflare 查询窗口
+- `schedule.timezone`: 只影响任务调度在本地何时执行，不影响 Cloudflare 查询窗口，也不影响 API 调用计数的归零时间
 - `schedule.retry.max_attempts`: 单次计划任务失败后的最大重试次数
 - `schedule.retry.delay_seconds`: 每次重试之间的等待秒数
 - `alerting.lark.webhook_url`: Lark 自定义机器人 webhook 地址，留空则不发送告警

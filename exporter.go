@@ -24,6 +24,7 @@ type Exporter struct {
 	mu                  sync.RWMutex
 	samples             []Sample
 	counters            map[string]float64
+	counterDate         string
 	lastError           string
 	lastPartial         string
 	lastNotifiedPartial string
@@ -321,7 +322,7 @@ func (e *Exporter) RenderMetrics() string {
 	writeMetricHeader(&b, "cloudflare_bytes_egress_last_month_to_date", "Gauge", "Previous month's cumulative egress bytes through the equivalent day-of-month across the selected product scope.")
 	writeMetricHeader(&b, "cloudflare_bytes_cached_last_month_to_date", "Gauge", "Previous month's cumulative cached HTTP bytes through the equivalent day-of-month.")
 	writeMetricHeader(&b, "cloudflare_requests_total_last_month_to_date", "Gauge", "Previous month's cumulative requests or connection count through the equivalent day-of-month across the selected product scope.")
-	writeMetricHeader(&b, "cloudflare_analytics_query_total", "Counter", "Total number of upstream Cloudflare analytics API calls.")
+	writeMetricHeader(&b, "cloudflare_analytics_query_total_daily", "Gauge", "Current day's cumulative number of upstream Cloudflare analytics API calls.")
 	writeMetricHeader(&b, "cloudflare_analytics_last_success_timestamp", "Gauge", "Unix timestamp of the last successful collection.")
 	writeMetricHeader(&b, "cloudflare_analytics_partial_failure", "Gauge", "Whether the latest collection reused previous values for any partial upstream failure.")
 	writeMetricHeader(&b, "cloudflare_analytics_up", "Gauge", "Whether the exporter has a fresh successful snapshot.")
@@ -346,7 +347,7 @@ func (e *Exporter) RenderMetrics() string {
 			"zone_domain": parts[1],
 			"status":      parts[2],
 		}
-		b.WriteString("cloudflare_analytics_query_total")
+		b.WriteString("cloudflare_analytics_query_total_daily")
 		b.WriteString(formatLabels(labels))
 		b.WriteByte(' ')
 		b.WriteString(strconv.FormatFloat(e.counters[key], 'f', -1, 64))
@@ -406,6 +407,11 @@ func (e *Exporter) ShouldNotifyPartial() (string, bool) {
 func (e *Exporter) bumpQueryCounter(zoneID, zoneDomain, status string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	currentDate := time.Now().UTC().Format("2006-01-02")
+	if e.counterDate != currentDate {
+		e.counters = map[string]float64{}
+		e.counterDate = currentDate
+	}
 	key := strings.Join([]string{zoneID, zoneDomain, status}, "\x00")
 	e.counters[key]++
 }
